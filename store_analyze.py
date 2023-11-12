@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+import numpy as np
 import time
 
 #Creates three directories
@@ -116,34 +117,45 @@ def analyze_fixed(page, index_of_attribute):
     if index_of_attribute > 5:
         print("Index of attribute should be between 0 and 5")
         return
-    with open(f'./Fixed/{page}', 'r') as f:
+    with open(f'./Fixed/{page[0]}', 'r') as f:
         values = []
         lines = f.readlines()
         for line in lines:
             value = line[index_of_attribute*20:index_of_attribute*20+20]
             values.append(int(value.rstrip('x')))
-        print(sum(values)/len(values))
+        return sum(values),len(values)
 
 def analyze_delimited(page, index_of_attribute):
     if index_of_attribute > 5:
         print("Index of attribute should be between 0 and 5")
         return
-    with open(f'./Delimited/{page}', 'r') as f:
+    with open(f'./Delimited/{page[0]}', 'r') as f:
         values = []
         lines = f.readlines()
         for line in lines:
             value = line.split('$')[index_of_attribute]
             values.append(int(value))
-        print(sum(values)/len(values))
+        return sum(values),len(values)
 
 def analyze(directory, index_of_attribute, num_processes):
-    path = './{directory}'
+    if directory not in ["Fixed", "Delimited", "Offset"]:
+        print("Directory should be either Fixed, Delimited or Offset")
+        return
+    path = f'./{directory}'
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    files_per_process = int(np.ceil(len(files) / num_processes))
+    divided_files = [files[i:i + files_per_process] for i in range(0, len(files), files_per_process)]
+    pool = multiprocessing.Pool(processes=num_processes)
     if directory == "Fixed":
-        files_per_process = len(files) // num_processes
-        pool = multiprocessing.Pool(processes=num_processes)
-        results = pool.starmap(analyze_fixed, [(page, index_of_attribute) for page in files])
+        results = pool.starmap(analyze_fixed, [(page, index_of_attribute) for page in divided_files])
+    elif directory == "Delimited":
+        results = pool.starmap(analyze_delimited, [(page, index_of_attribute) for page in divided_files])
+    elif directory == "Offset":
+        results = pool.starmap(analyze_delimited, [(page, index_of_attribute) for page in divided_files])
+    pool.close()
+    pool.join()
+    average = sum([result[0] for result in results]) / sum([result[1] for result in results])
+    print(f"{index_of_attribute} average: {average}")
 
-analyze_fixed('page_1.txt', 3)
-analyze_delimited('page_1.txt', 3)
-# if __name__ == '__main__':
+if __name__ == '__main__':
+    analyze('Fixed', 2, 8)
