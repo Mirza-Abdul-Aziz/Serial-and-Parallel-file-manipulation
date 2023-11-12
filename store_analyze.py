@@ -1,23 +1,21 @@
-import sys,os
+import os
 import multiprocessing
 import time
 
 #Creates three directories
 def create_dirs():
-
     # Check if Directories folder exists
-    if not os.path.exists('./Directories/Fixed'):
-        os.makedirs('./Directories/Fixed')
-    if not os.path.exists('./Directories/Delimited'):
-        os.makedirs('./Directories/Delimited')
-    if not os.path.exists('./Directories/Offset'):
-        os.makedirs('./Directories/Offset')
+    if not os.path.exists('./Fixed'):
+        os.makedirs('./Fixed')
+    if not os.path.exists('./Delimited'):
+        os.makedirs('./Delimited')
+    if not os.path.exists('./Offset'):
+        os.makedirs('./Offset')
 
 # Writes line to file
 def write_to_file(directory, line, page_num):
-    
-
-    file_path = f'./Directories/{directory}/page_{page_num}.txt'
+    # Create file path
+    file_path = f'./{directory}/page_{page_num}.txt'
     with open(file_path, 'w') as f:
         f.write(line)
 
@@ -36,8 +34,24 @@ def conversion_for_fixed(attributes):
         line += attribute
     return line
 
-def conversion_for_offset(values):
-    return ' '.join(map(str, values))
+def conversion_for_offset(attributes):
+    result = ''
+    current_position = 0
+    
+    for attr in attributes:
+        result += str(attr).zfill(2) + str(current_position).zfill(2)
+        current_position += 2  # Assuming a fixed offset size of 2 for each attribute
+    
+    return result
+
+def extract_attributes(offset_string):
+    attributes = []
+
+    for i in range(0, len(offset_string), 4):  # Assuming each offset is of size 4 (2 for attribute and 2 for position)
+        attribute = int(offset_string[i:i+2])
+        attributes.append(attribute)
+
+    return attributes
 
 def store(input_file_path):
     # Call create_dirs() to create directories
@@ -73,6 +87,9 @@ def store(input_file_path):
                 # Append values to delimited_content after converting them to specified format
                 delimited_content.append('$'.join(map(str, values)))
                 
+                # Append values to offset_content after converting them to specified format
+                offset_content.append(conversion_for_offset(values))
+
                 # Increment counter
                 counter += 1
 
@@ -82,6 +99,7 @@ def store(input_file_path):
                     # Write fixed_content, delimited_content and offset_content to files
                     write_to_file('Fixed', '\n'.join(fixed_content), page_number)
                     write_to_file('Delimited', '\n'.join(delimited_content), page_number)
+                    write_to_file('Offset', '\n'.join(offset_content), page_number)
                     
                     # Increment page number to write to next page
                     page_number += 1
@@ -92,6 +110,40 @@ def store(input_file_path):
                     delimited_content = []
                     offset_content = []
 
-store('./input_data_files/input_1000.txt')                
+store('input_data_files/input_1000.txt')
 
+def analyze_fixed(page, index_of_attribute):
+    if index_of_attribute > 5:
+        print("Index of attribute should be between 0 and 5")
+        return
+    with open(f'./Fixed/{page}', 'r') as f:
+        values = []
+        lines = f.readlines()
+        for line in lines:
+            value = line[index_of_attribute*20:index_of_attribute*20+20]
+            values.append(int(value.rstrip('x')))
+        print(sum(values)/len(values))
+
+def analyze_delimited(page, index_of_attribute):
+    if index_of_attribute > 5:
+        print("Index of attribute should be between 0 and 5")
+        return
+    with open(f'./Delimited/{page}', 'r') as f:
+        values = []
+        lines = f.readlines()
+        for line in lines:
+            value = line.split('$')[index_of_attribute]
+            values.append(int(value))
+        print(sum(values)/len(values))
+
+def analyze(directory, index_of_attribute, num_processes):
+    path = './{directory}'
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    if directory == "Fixed":
+        files_per_process = len(files) // num_processes
+        pool = multiprocessing.Pool(processes=num_processes)
+        results = pool.starmap(analyze_fixed, [(page, index_of_attribute) for page in files])
+
+analyze_fixed('page_1.txt', 3)
+analyze_delimited('page_1.txt', 3)
 # if __name__ == '__main__':
