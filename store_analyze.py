@@ -55,8 +55,11 @@ def extract_attributes(offset_string):
     return attributes
 
 def store(input_file_path):
+    print("Creating directories...")
     # Call create_dirs() to create directories
     create_dirs()
+    print("Directories created...")
+    print("Storing data...")
 
     # Initialize variables
     page_number = 1 # Page number
@@ -64,98 +67,107 @@ def store(input_file_path):
     fixed_content = [] # List to store 500 fixed length records
     delimited_content = [] # List to store 500 delimited records
     offset_content = [] # List to store 500 offset records
-    
     # Read input file
     with open(input_file_path, 'r') as f:
         # Read lines from input file
         lines = f.readlines()
-
         # Iterate over lines
         for line in lines:
-
             # Strip line and split it by comma
             line = line.strip().split(',')
-
             # Check if operation is INSERT
             if line[0] == 'INSERT':
-
                 # Convert values to int
                 values = list(map(int, line[1:]))
-                
                 # Append values to fixed_content after converting them to specified format
                 fixed_content.append(conversion_for_fixed(values))
-
                 # Append values to delimited_content after converting them to specified format
                 delimited_content.append('$'.join(map(str, values)))
-                
                 # Append values to offset_content after converting them to specified format
                 offset_content.append(conversion_for_offset(values))
-
                 # Increment counter
                 counter += 1
-
                 # Check if counter is 500 then write fixed_content, delimited_content and offset_content to files and reset counter and lists
                 if counter == 500:
-                    
                     # Write fixed_content, delimited_content and offset_content to files
                     write_to_file('Fixed', '\n'.join(fixed_content), page_number)
                     write_to_file('Delimited', '\n'.join(delimited_content), page_number)
                     write_to_file('Offset', '\n'.join(offset_content), page_number)
-                    
                     # Increment page number to write to next page
                     page_number += 1
-
                     # Reset counter and lists
                     counter = 0
                     fixed_content = []
                     delimited_content = []
                     offset_content = []
+    print("Data stored...")
 
-store('input_data_files/input_1000.txt')
-
+# Calculates the average of the attribute at the given index for all pages in the given directory
 def analyze_fixed(page, index_of_attribute):
+    # Check if index_of_attribute is between 0 and 5
     if index_of_attribute > 5:
         print("Index of attribute should be between 0 and 5")
         return
+    # Read file
     with open(f'./Fixed/{page[0]}', 'r') as f:
         values = []
         lines = f.readlines()
+        # Iterate over lines
         for line in lines:
+            # Extract value at given index
             value = line[index_of_attribute*20:index_of_attribute*20+20]
+            # Append value to values after removing 'x' from the end
             values.append(int(value.rstrip('x')))
+        # Return sum of values and length of values
         return sum(values),len(values)
 
 def analyze_delimited(page, index_of_attribute):
+    # Check if index_of_attribute is between 0 and 5
     if index_of_attribute > 5:
         print("Index of attribute should be between 0 and 5")
         return
+    # Read file
     with open(f'./Delimited/{page[0]}', 'r') as f:
         values = []
         lines = f.readlines()
+        # Iterate over lines
         for line in lines:
+            # Split line by '$' and extract value at given index
             value = line.split('$')[index_of_attribute]
+            # Append value to values
             values.append(int(value))
+        # Return sum of values and length of values
         return sum(values),len(values)
 
 def analyze(directory, index_of_attribute, num_processes):
+    # Check if directory is Fixed, Delimited or Offset
     if directory not in ["Fixed", "Delimited", "Offset"]:
         print("Directory should be either Fixed, Delimited or Offset")
         return
+    # Reading all files in the directory
     path = f'./{directory}'
+    # Making a list of all files in the directory
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    # Number of files per process
     files_per_process = int(np.ceil(len(files) / num_processes))
+    # Dividing files into chunks
     divided_files = [files[i:i + files_per_process] for i in range(0, len(files), files_per_process)]
+    # Creating a pool of processes
     pool = multiprocessing.Pool(processes=num_processes)
+    # Calling analyze_fixed, analyze_delimited or analyze_offset based on directory
     if directory == "Fixed":
         results = pool.starmap(analyze_fixed, [(page, index_of_attribute) for page in divided_files])
     elif directory == "Delimited":
         results = pool.starmap(analyze_delimited, [(page, index_of_attribute) for page in divided_files])
     elif directory == "Offset":
         results = pool.starmap(analyze_delimited, [(page, index_of_attribute) for page in divided_files])
+    # Closing the pool
     pool.close()
     pool.join()
+    # Calculating average from results returned by processes
     average = sum([result[0] for result in results]) / sum([result[1] for result in results])
     print(f"{index_of_attribute} average: {average}")
 
 if __name__ == '__main__':
+    store('input_data_files/input_1000.txt')
     analyze('Fixed', 2, 8)
