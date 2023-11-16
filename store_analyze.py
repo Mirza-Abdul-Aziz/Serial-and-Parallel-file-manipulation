@@ -35,23 +35,19 @@ def conversion_for_fixed(attributes):
 def conversion_for_offset(attributes):
     offset = ''
     values = ''
-    current_position = 0
-
+    current_position = 12
+    prev_attribute = 0
     for attr in attributes:
-        offset += str(current_position).zfill(2)
+        if offset == '':
+            offset += str(current_position)
+            prev_attribute = attr
+        else:
+            current_position = current_position + len(str(prev_attribute))
+            prev_attribute = attr
+            offset += str(current_position)
         values += str(attr)
-        current_position += 1  # Assuming a fixed offset size of 2 for each attribute
     result = offset + values
     return result
-
-def extract_attributes(offset_string):
-    attributes = []
-
-    for i in range(0, len(offset_string), 4):  # Assuming each offset is of size 4 (2 for attribute and 2 for position)
-        attribute = int(offset_string[i:i+2])
-        attributes.append(attribute)
-
-    return attributes
 
 def store(input_file_path):
     # Call create_dirs() to create directories
@@ -150,14 +146,17 @@ def analyze_offset(page, index_of_attribute):
         # Iterate over lines
         for line in lines:
             # Extract offset string
-            if line == "6,2":
+            if line == "6,2\n":
                 continue
-            offset_string = line[11:]
-            # Extract attributes from offset string
-            attributes = extract_attributes(offset_string)
-            print(attributes)
+            current_offset = int(line[index_of_attribute*2:index_of_attribute*2+2])
+            if index_of_attribute == 5:
+                values.append(int(line[current_offset:]))
+                continue
+            next_offset = line[index_of_attribute*2+2:index_of_attribute*2+4]
+            value_length = int(next_offset) - int(current_offset)
+            value = int(line[current_offset:current_offset+value_length])
             # Extract value at given index
-            value = attributes[index_of_attribute]
+            
             # Append value to values
             values.append(value)
         f.close()
@@ -174,12 +173,6 @@ def analyze(directory, index_of_attribute, num_processes):
     path = f'./{directory}'
     # Making a list of all files in the directory
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
-    # # Number of files per process
-    # print(f"Number of files: {len(files)}")
-    # files_per_process = int(np.ceil(len(files) / num_processes))
-    # print(f"Files per process: {files_per_process}")
-    # # Dividing files into chunks
-    # divided_files = [files[i:i + files_per_process] for i in range(0, len(files), files_per_process)]
     # Creating a pool of processes
     pool = multiprocessing.Pool(processes=num_processes)
     # Calling analyze_fixed, analyze_delimited or analyze_offset based on directory
@@ -188,7 +181,7 @@ def analyze(directory, index_of_attribute, num_processes):
     elif directory == "Delimited":
         results = pool.starmap(analyze_delimited, [(page, index_of_attribute) for page in files])
     elif directory == "Offset":
-        results = pool.starmap(analyze_delimited, [(page, index_of_attribute) for page in files])
+        results = pool.starmap(analyze_offset, [(page, index_of_attribute) for page in files])
     # Closing the pool
     pool.close()
     pool.join()
@@ -197,8 +190,27 @@ def analyze(directory, index_of_attribute, num_processes):
     average = sum([result[0] for result in results]) / sum([result[1] for result in results])
     print(f"{index_of_attribute} average: {average}")
 
+def test_offset(index_of_attribute, file_path):
+    values = []
+    with open(file_path, 'r') as f:
+        lines = f.readlines()
+    # print(line[index_of_attribute*2:index_of_attribute+2])
+    for line in lines:
+        if line == "6,2\n":
+            continue
+        current_offset = int(line[index_of_attribute*2:index_of_attribute*2+2])
+        if index_of_attribute == 5:
+            values.append(int(line[current_offset:]))
+            continue
+        next_offset = line[index_of_attribute*2+2:index_of_attribute*2+4]
+        value_length = int(next_offset) - int(current_offset)
+        value = int(line[current_offset:current_offset+value_length])
+        values.append(value)
+    print(sum(values)/len(values))
+
+
 if __name__ == '__main__':
     store('input_data_files/input_100K.txt')
     start_time = time.time()
-    analyze('Fixed', 2, 8)
+    analyze('Offset', 3, 8)
     print(f"Time taken for Fixed: {round((time.time() - start_time), 2)} seconds")
